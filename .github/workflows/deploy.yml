@@ -1,0 +1,38 @@
+name: Publish public app policies
+on:
+  push:
+    branches: [main]
+    paths: [public-site.tar.gz.b64, '.github/workflows/deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v5
+      - name: Restore the public static pages
+        run: |
+          python3 - <<'PY'
+          import base64, io, pathlib, tarfile
+          raw = base64.b64decode(pathlib.Path('public-site.tar.gz.b64').read_text())
+          with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as archive:
+              archive.extractall('_site', filter='data')
+          assert pathlib.Path('_site/index.html').is_file()
+          assert not pathlib.Path('_site/CNAME').exists()
+          PY
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
